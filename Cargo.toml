@@ -1,0 +1,38 @@
+[package]
+authors = ["Georg Bramm <georg.bramm@aisec.fraunhofer.de>"]
+categories = ["cryptography"]
+description = "a hope framework including library, frontend and backend"
+documentation = "https://docs.rs/hope"
+homepage = "https://github.com/georgbramm/hope"
+keywords = [
+  "paillier",
+  "elgamal",
+  "cryptography",
+  "homomorphic-encrypt",
+  "secure-computation",
+]
+license = "MIT"
+name = "hope"
+readme = "README.md"
+repository = "https://github.com/georgbramm/hope.rs"
+version = "1.0.0"
+edition = "2018"
+
+[badges]
+circle-ci = { repository = "georgbramm/hope.rs", branch = "master" }
+codecov = { repository = "georgbramm/hope.rs", branch = "master", service = "github" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+serde = { version = "1.0.104", features = ["derive"] }
+toml = "0.5.6"
+failure = "0.1.6"
+
+[features]
+
+[workspace]
+members = [
+    "server",
+    "cli",
+    "library"
+]

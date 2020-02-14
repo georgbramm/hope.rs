@@ -1,0 +1,17 @@
+---
+name: hope.rs
+bin_name: hope-backend
+author: Georg Bramm <georg.bramm@aisec.fraunhofer.de>
+about: The web server backend of hope.rs
+after_help: 'More info at: https://github.com/georgbramm/hope.rs'
+global_settings:
+  - ColoredHelp
+
+args:
+  - config:
+      default_value: Config.toml
+      env: CONFIG_FILE
+      help: File path to the configuration file
+      long: config-file
+      short: c
+      value_name: PATH

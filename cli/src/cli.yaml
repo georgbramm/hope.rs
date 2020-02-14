@@ -1,0 +1,54 @@
+---
+name: hope.rs
+bin_name: hope-cli
+author: Georg Bramm <georg.bramm@aisec.fraunhofer.de>
+about: Command line interface of hope.rs
+after_help: 'More info at: https://github.com/georgbramm/hope.rs'
+global_settings:
+  - ColoredHelp
+
+args:
+  - config:
+      default_value: Config.toml
+      env: CONFIG_FILE
+      help: File path to the configuration file
+      long: config-file
+      short: c
+      value_name: PATH
+      
+subcommands:
+    - setup:
+        about: setup a new ehOPE scheme and export \{SP\}
+        version: "0.1"
+        author: Georg Bramm <georg.bramm@aisec.fraunhofer.de>
+        args:
+            - output:
+                short: o
+                long: output-file
+                help: filename to export to
+                takes_value: true     
+    - keygen:
+        about: generate a ehOPE key pair \{K\}
+        version: "0.1"
+        author: Georg Bramm <georg.bramm@aisec.fraunhofer.de>
+        args:
+            - output:
+                short: o
+                long: output-file                
+                help: filename to export to
+                takes_value: true       
+    - encrypt:
+        about: encrypt a osm map
+        version: "0.1"
+        author: Georg Bramm <georg.bramm@aisec.fraunhofer.de>
+        args:
+            - output:
+                short: o
+                long: output-file                
+                help: filename to export CT to
+                takes_value: true  
+            - input:
+                short: i
+                long: input-file                
+                help: filename to import osm from
+                takes_value: true                  
