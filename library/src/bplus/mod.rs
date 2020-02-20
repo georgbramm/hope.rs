@@ -1,12 +1,8 @@
 #![feature(nll)]
 
-use mongodb::coll::Collection;
-use paillier::*;
-use paillier::integral::*;
+use crate::paillier::*;
 use mongodb::oid::ObjectId;
 use crate::scheme::*;
-use mongodb::coll::results::InsertOneResult;
-use mongodb::{Bson, bson, doc, Client, ThreadedClient};
 use std::path::Path;
 use std::fs::File;
 use std::error::Error;
@@ -16,15 +12,13 @@ const TREE_BEGIN: &'static str = "-----BEGIN TREE-----\n";
 const TREE_END: &'static str = "\n-----END TREE-----";
 use serde_derive::{Serialize, Deserialize};
 
-pub mod tree;
-use self::tree::Node;
-use self::tree::node::Leaf;
+use ::hope::protocol::model::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Tree {
     pub _id: ObjectId,
     pub _degree: usize,
-    pub _root: Option<Node>,
+    pub _root: Option<hopeNode>,
 }
 
 impl Tree {
@@ -36,7 +30,7 @@ impl Tree {
         }
     }
 
-    pub fn search(&self, key: Leaf) -> Option<&Node> {
+    pub fn search(&self, key: hopeLeaf) -> Option<&hopeNode> {
         match self._root {
             None => None,
             Some(ref root) => root.search(key),
@@ -50,17 +44,17 @@ impl Tree {
         }
     }
 
-    pub fn update_apl(&self, _coll: &Collection) {
+    pub fn update_apl(&self) {
         match &self._root {
             None => {}
-            Some(_r) => _r.update_apl(0, _coll),
+            Some(_r) => _r.update_apl(0),
         }
     }
 
-    pub fn insert(&mut self, _key: Leaf) {
+    pub fn insert(&mut self, _key: hopeLeaf) {
         match self._root {
             None => {
-                let mut node = Node::new(self._degree, true);
+                let mut node = hopeNode::new(self._degree, true);
                 node.insert_key(_key);
                 self._root = Some(node);
             }
@@ -68,8 +62,8 @@ impl Tree {
                 // Create a new root if filled
                 if root.is_full() {
                     // rendundant code here to get around rust's ownership checks
-                    let mut left = Node::new(root._degree, true);
-                    let mut right = Node::new(root._degree, true);
+                    let mut left = hopeNode::new(root._degree, true);
+                    let mut right = hopeNode::new(root._degree, true);
                     let mut index = 0;
                     while index < root.capacity() {
                         let k = root.remove_key(_key.clone());

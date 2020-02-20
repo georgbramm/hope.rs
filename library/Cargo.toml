@@ -17,27 +17,17 @@ repository = "https://github.com/georgbramm/rust-hope"
 license = "MIT/Apache-2.0"
 categories = ["cryptography"]
 
-[badges]
+[badges] 
 travis-ci = { repository = "https://github.com/georgbramm/rust-hope" }
 gitlab = { repository = "...", branch = "master" }
 
 [dependencies] 
-bn = { git = "https://github.com/georgbramm/bn" }
-actix = "0.9.0"
-actix-codec = "0.2.0"
-actix-web = { version="2.0.0", features=["openssl"] }
-actix-web-actors = "2.0.0"
-actix-files = "0.2.1"
-actix-rt = "1.0.0"
-actix-service = "1.0.0"
+
+env_logger = "0.6"
 serde = "1.0.16"
 serde_json = "1.0.4"
 serde_derive = "1.0.16"
-paillier = { git = "https://github.com/georgbramm/rust-paillier" }
-rand = "0.3"
-mongodb = "0.4.0"
-env_logger = "0.6"
-bincode = "1.2.1"
-clap = "2.27.1"
-base64 = "0.10.1"
+getrandom = { version = "0.1", features = ["stdweb"] }
+uuid = { version = "0.8", features = ["serde", "v4", "stdweb"] }
+bn = { path = "../bn" }
 hope = { version = "1.0.0", path = ".." }

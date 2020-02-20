@@ -1,7 +1,8 @@
 # Compiler configuration
 GENERAL_ARGS = --release
-FRONTEND_ARGS = $(GENERAL_ARGS) -p hope_cli
-BACKEND_ARGS = $(GENERAL_ARGS) -p hope_server
+CLI_ARGS = $(GENERAL_ARGS) -p hope_cli
+FRONTEND_ARGS = $(GENERAL_ARGS) -p hope_frontend --target wasm32-unknown-unkown
+BACKEND_ARGS = $(GENERAL_ARGS) -p hope_backend
 CONTAINER_RUNTIME ?= docker
 
 # Application configuration
@@ -16,13 +17,15 @@ MONGO_DATABASE := $(strip $(call get_config_value,database))
 
 .PHONY: \
 	build-doc \
-	build-server \
+	build-backend \
+	build-frontend \
 	build-cli \
 	coverage \
 	clean \
 	deploy \
 	run-cli \
-	run-server \
+	run-frontend \
+	run-backend \
 	run-mongo \
 	stop-mongo 
 
@@ -32,23 +35,29 @@ else
 GENERAL_ARGS += -v
 endif
 
-all: build-server build-cli
+all: build-backend build-frontend build-cli
 
-build-server:
+build-frontend:
+	cargo build $(FRONTEND_ARGS)
+
+build-backend:
 	cargo build $(BACKEND_ARGS)
-
-build-doc:
-	cargo doc --all --no-deps
 
 build-cli:
 	cargo build $(FRONTEND_ARGS)
+	
+build-doc:
+	cargo doc --all --no-deps
 
 coverage:
 	cd backend && cargo kcov
+	cd frontend && cargo kcov
+	cd cli && cargo kcov
 	
 clean:
 	cd cli && cargo clean 
-	cd server && cargo clean
+	cd frontend && cargo clean
+	cd backend && cargo clean
 	cd library && cargo clean
 	cargo clean  
 
@@ -81,11 +90,14 @@ run-app: run-mongo
 		echo "App already running" ;\
 	fi
 
-run-server: run-mongo
+run-backend: run-mongo
 	cargo run $(BACKEND_ARGS)
 
 run-cli:
-	cargo run $(FRONTEND_ARGS)
+	cargo run $(CLI_ARGS)
+
+run-frontend:
+	cargo web start $(FRONTEND_ARGS) --auto-reload --host 0.0.0.0
 
 run-mongo:
 	if [ ! "$(shell $(CONTAINER_RUNTIME) ps -q -f name=mongo)" ]; then \

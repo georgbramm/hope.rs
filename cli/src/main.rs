@@ -15,6 +15,7 @@ use hope_server::server::Server;
 const CMD_SETUP: &'static str = "setup";
 const CMD_KEYGEN: &'static str = "keygen";
 const CMD_ENCRYPT: &'static str = "encrypt";
+const CMD_ENCRYPT: &'static str = "decrypt";
 
 #[derive(Debug)]
 struct ReclaimPathError {

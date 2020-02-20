@@ -1,0 +1,21 @@
+[package]
+name = "bn"
+version = "0.4.6"
+authors = ["Sean Bowe <ewillbefull@gmail.com>", "Bramm, Georg <georg.bramm@aisec.fraunhofer.de>"]
+description = "Pairing cryptography with the Barreto-Naehrig curve"
+keywords = ["pairing","crypto","cryptography"]
+readme = "README.md"
+homepage = "https://github.com/georgbramm/bn"
+repository = "https://github.com/georgbramm/bn"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+stdweb = "0.4.20"
+getrandom = { version = "0.1", features = ["stdweb"] }
+byteorder = "1.2.2"
+serde = "1.0"
+serde_derive = "1.0"
+
+[dev-dependencies.bincode]
+version = "1.0.0"
+default-features = false

@@ -1,5 +1,4 @@
-mod protocol;
-use protocol::*;
+use hope::protocol::*;
 
 use std::time::{Duration, Instant};
 use actix::prelude::*;

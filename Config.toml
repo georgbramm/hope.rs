@@ -1,7 +1,11 @@
-[server]
+[backend]
 url = "http://127.0.0.1:8081"
 cert = "tls/cert.pem"
 key = "tls/key.pem"
+
+[frontend]
+ip = "127.0.0.1"
+port = "8081"
 
 [log]
 actix-web = "debug"

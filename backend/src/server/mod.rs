@@ -98,7 +98,7 @@ impl Server {
             });
 
         // Create the server url from the given configuration
-        let url = Url::parse(&config.server.url)?;
+        let url = Url::parse(&config.backend.url)?;
 
         // Bind the address
         let addrs = Self::url_to_socket_addrs(&url)?;
@@ -127,8 +127,8 @@ impl Server {
     /// Build an SslAcceptorBuilder from a config
     fn build_tls(config: &Config) -> Fallible<SslAcceptorBuilder> {
         let mut tls_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
-        tls_builder.set_private_key_file(&config.server.key, SslFiletype::PEM)?;
-        tls_builder.set_certificate_chain_file(&config.server.cert)?;
+        tls_builder.set_private_key_file(&config.backend.key, SslFiletype::PEM)?;
+        tls_builder.set_certificate_chain_file(&config.backend.cert)?;
         Ok(tls_builder)
     }
 

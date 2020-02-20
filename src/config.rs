@@ -8,7 +8,9 @@ use toml;
 /// The global configuration
 pub struct Config {
     /// The server configuration
-    pub server: ServerConfig,
+    pub backend: BackendConfig,
+    /// The frontend server configuration
+    pub frontend: FrontendConfig,
     /// The logger configuration
     pub log: LogConfig,
     /// The database configuration
@@ -27,13 +29,23 @@ impl Config {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 /// The server configuration
-pub struct ServerConfig {
+pub struct BackendConfig {
     /// The full server URL
     pub url: String,
     /// The server certificate
     pub cert: PathBuf,
     /// The server key
     pub key: PathBuf,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+/// The server configuration
+pub struct FrontendConfig {
+    /// The server IP
+    pub ip: String,
+    /// The server port
+    pub port: String,
 }
 
 #[derive(Clone, Deserialize)]

@@ -15,23 +15,19 @@
 //!let (_pk, _msk) = setup();
 //! ```
 extern crate bn;
-extern crate rand;
 extern crate serde;
 #[cfg(feature = "serde_derive")]
 extern crate serde_derive;
-extern crate paillier;
 extern crate serde_json;
 extern crate mongodb;
 
-use crate::bplus::tree::Node;
-use crate::bplus::tree::node::Leaf;
+use ::hope::protocol::model::*;
 use crate::bplus::Tree;
 use crate::websocket::HopeWebSocket;
-use bincode::serialize;
+use crate::paillier::Paillier;
 use bn::*;
 use std::string::String;
-use paillier::*;
-use paillier::Sub;
+use crate::paillier::*;
 use std::cmp::Ordering;
 use std::ops::AddAssign;
 use std::ops::Sub as StdSub;
@@ -47,9 +43,10 @@ use std::marker::PhantomData;
 use mongodb::oid::ObjectId;
 use serde_derive::{Serialize, Deserialize};
 use actix_web_actors::ws;
+use num_bigint::BigInt;
 
 const DEGREE: usize = 4;
-
+ 
 /// ehOPE scheme
 pub struct hope<'a> {
     /// HopeWebsocket communication
@@ -61,69 +58,11 @@ pub struct hope<'a> {
     /// lookup table of hOPE scheme
     pub _apl: BTreeMap<Vec<u8>, ObjectId>,
     /// Optional keypair
-    pub _key: Option<hopeKey>,
-}
-
-/// ehOPE System Parameters
-#[derive(Serialize, Deserialize, Clone)]
-pub struct hopeSP {
-	/// id of the ehOPE scheme
-    pub _id: ObjectId,
-	/// name of the ehOPE scheme
-    pub _name: String,
-    /// G1 generator of the ehOPE scheme
-    pub _p: bn::G1,
-    /// G2 generator of the ehOPE scheme
-    pub _q: bn::G2,	
-}
-
-/// ehOPE Ciphertext (CT)
-#[derive(Serialize, Deserialize, Clone)]
-pub struct hopeCiphertext {
-    pub _id: ObjectId,
-    pub _c: EncodedCiphertext<u64>,
-    pub _g: bn::G1,
-    pub _h: bn::Gt,
-    pub _o: u64,
-}
-
-/// A hOPE KEY (SK)
-#[derive(Serialize, Deserialize, Clone)]
-pub struct hopeKey {
-    pub _dk: Option<DecryptionKey>,
-    pub _ek: EncryptionKey,
-}
-
-impl hopeSP {
-	pub fn new(_name: String) -> hopeSP {
-        // random number generator
-        let _rng = &mut rand::thread_rng();		
-        // return SP
-        hopeSP {
-            _id: ObjectId::new().unwrap(),
-            _name: _name,
-            _p: G1::random(_rng),
-            _q: G2::random(_rng),
-        }	
-	}
-}
-
-impl hopeKey {
-    pub fn new() -> hopeKey {
-        // generate a fresh keypair and extract encryption and decryption key
-        let (ek, dk) = Paillier::keypair().keys();
-        // return hopeKey
-        hopeKey {
-            _dk: Some(dk),
-            _ek: ek,
-        }
-    }
+    pub _key: Option<hopeK>,
 }
 
 impl hope<'_> {
     pub fn new(_name: String, _ws: &HopeWebSocket) -> hope {
-        // random number generator
-        let _rng = &mut rand::thread_rng();
         // return System
         hope {
             _ws: _ws,
@@ -135,8 +74,6 @@ impl hope<'_> {
     }
     
     pub fn from_sp(_sp: hopeSP, _ws: &HopeWebSocket) -> hope {
-        // random number generator
-        let _rng = &mut rand::thread_rng();
         // return System
         hope {
             _ws: _ws,
@@ -147,23 +84,24 @@ impl hope<'_> {
         }
     }    
 
-    pub fn keygen() -> Option<hopeKey> {
-        Some(hopeKey::new())
+    pub fn keygen() -> Option<hopeK> {
+    	let (ek, dk) = Paillier::keygen(256);
+        Some(hopeK::new(ek,dk))
     } 
 
     pub fn parameters(&self) -> hopeSP {
     	self._sp.clone()
     }
 
-    pub fn encrypt(&mut self, _m: u64) -> Option<hopeCiphertext> {
+    pub fn encrypt(&mut self, _m: BigInt) -> Option<hopeCT> {
         if let Some(_ek) = self.enc_key() {
             self.encrypt_ek(&_ek, _m);
         }
         None
     }
 
-    pub fn encrypt_ek(&mut self, _ek: &EncryptionKey, _m: u64) -> Option<hopeCiphertext> {
-        let _c = Paillier::encrypt(_ek, _m);
+    pub fn encrypt_ek(&mut self, _ek: &PaillierEncryptionKey, _m: BigInt) -> Option<hopeCT> {
+        let _c = Paillier::encrypt(&_ek, &_m);
         // return pk_u and sk_u
         match Fr::from_str(&_m.to_string()) {
             Some(_fr) => {
@@ -173,12 +111,12 @@ impl hope<'_> {
                     None => {
                         let _h = pairing(_g, self._sp._q);
                         let _id = ObjectId::new().unwrap();
-                        let leaf = Leaf::new(_id.clone(), _c.clone());
+                        let leaf = hopeLeaf::new(_id.clone(), _c.clone(), 0);
                         self.insert_tree(leaf);
                         self.update_tree();
                         match self.lookup_tree(_id.clone()) {
                             Some(_code) => {
-                                let _hct = hopeCiphertext::from_id(_id, _c, _g, _h, _code);
+                                let _hct = hopeCT::from_id(_id, _c, _g, _h, _code);
                                 match self.insert_apl(_hct.clone()) {
                                     Some(ins_res) => Some(_hct),
                                     None => None,
@@ -193,26 +131,25 @@ impl hope<'_> {
         }
     }
 
-    pub fn decrypt(&self, _ct: hopeCiphertext, _dk: DecryptionKey) -> u64 {
-        Paillier::decrypt(&_dk, &_ct._c)
+    pub fn decrypt(&self, _ct: hopeCT, _dk: PaillierDecryptionKey, _ek: PaillierEncryptionKey) -> BigInt {
+        Paillier::decrypt(&_dk, &_ek, &_ct._c)
     }
 
-    pub fn add(&mut self, _ct1: &hopeCiphertext, _ct2: &hopeCiphertext) -> Option<hopeCiphertext> {
+    pub fn add(&mut self, _ct1: &hopeCT, _ct2: &hopeCT) -> Option<hopeCT> {
         if let Some(ek) = self.enc_key() {
             let _g1 = _ct1._g + _ct2._g;
             match self.lookup_apl(_g1) {
                 Some(_ct) => return Some(_ct),
                 None => {
                     let _h1 = pairing(_g1, self._sp._q);
-                    let _c = Paillier::add(&ek, &_ct1._c, &_ct2._c);
                     let _id = ObjectId::new().unwrap();
-                    Paillier::rerandomize(&ek, &_c);
-                    let leaf = Leaf::new(_id.clone(), _c.clone());
+                    let _c = Paillier::rerandomize(&ek, &Paillier::add(&ek, &_ct1._c, &_ct2._c));
+                    let leaf = hopeLeaf::new(_id.clone(), _c, 0);
                     self.insert_tree(leaf);
                     self.update_tree();
                     match self.lookup_tree(_id.clone()) {
                         Some(_code) => {
-                            let _hct = hopeCiphertext::from_id(_id, _c, _g1, _h1, _code);
+                            let _hct = hopeCT::from_id(_id, _c, _g1, _h1, _code);
                             match self.insert_apl(_hct.clone()) {
                                 Some(ins_res) => return Some(_hct),
                                 None => return None,
@@ -225,28 +162,32 @@ impl hope<'_> {
         }
         None
     }
-
-    pub fn sub(&mut self, _ct1: &hopeCiphertext, _ct2: &hopeCiphertext) -> Option<hopeCiphertext> {
+ 
+    pub fn sub(&mut self, _ct1: &hopeCT, _ct2: &hopeCT) -> Option<hopeCT> {
         if let Some(ek) = self.enc_key() {
             let _g1 = _ct1._g - _ct2._g;
             match self.lookup_apl(_g1) {
                 Some(_ct) => return Some(_ct),
                 None => {
                     let _id = ObjectId::new().unwrap();
-                    let _c = Paillier::sub(&ek, &_ct1._c, &_ct2._c);
-                    Paillier::rerandomize(&ek, &_c);
-                    let leaf = Leaf::new(_id.clone(), _c.clone());
-                    self.insert_tree(leaf);
-                    match self.lookup_tree(_id.clone()) {
-                        Some(_code) => {
-                            let _h1 = pairing(_g1, self._sp._q);
-                            let _hct = hopeCiphertext::from_id(_id, _c, _g1, _h1, _code);
-                            match self.insert_apl(_hct.clone()) {
-                                Some(ins_res) => return Some(_hct),
-                                None => return None,
-                            }
-                        }
-                        None => return None,
+                    match Paillier::sub(&ek, &_ct1._c, &_ct2._c) {
+                    	Some(result) => {
+		                    let _c = Paillier::rerandomize(&ek, &result);
+		                    let leaf = hopeLeaf::new(_id.clone(), _c.clone(), 0);
+		                    self.insert_tree(leaf);
+		                    match self.lookup_tree(_id.clone()) {
+		                        Some(_code) => {
+		                            let _h1 = pairing(_g1, self._sp._q);
+		                            let _hct = hopeCT::from_id(_id, _c, _g1, _h1, _code);
+		                            match self.insert_apl(_hct.clone()) {
+		                                Some(ins_res) => return Some(_hct),
+		                                None => return None,
+		                            }
+		                        }
+		                        None => return None,
+		                    }
+                    	},
+                    	None => return None,
                     }
                 }
             }
@@ -260,15 +201,15 @@ impl hope<'_> {
     //}
 
 
-    pub fn fetch_ct(&self, _id: ObjectId) -> Option<hopeCiphertext> {
+    pub fn fetch_ct(&self, _id: ObjectId) -> Option<hopeCT> {
         None
     }
 
-    pub fn insert_ct(&self, _ct: hopeCiphertext) -> Option<ObjectId> {
+    pub fn insert_ct(&self, _ct: hopeCT) -> Option<ObjectId> {
         None
     }
 
-    pub fn insert_tree(&mut self, _elem: Leaf) {
+    pub fn insert_tree(&mut self, _elem: hopeLeaf) {
         self._tree.insert(_elem);
     }
 
@@ -280,8 +221,8 @@ impl hope<'_> {
         self._tree.code(_id)
     }
 
-    pub fn lookup_apl(&self, _token: bn::G1) -> Option<hopeCiphertext> {
-        match serialize(&_token) {
+    pub fn lookup_apl(&self, _token: bn::G1) -> Option<hopeCT> {
+        match serde_json::to_string(&_token) {
             Err(_) => return None,
             Ok(_g) => {
                 match self._apl.get(&_g) {
@@ -292,31 +233,31 @@ impl hope<'_> {
         }
     }
 
-    pub fn insert_apl(&mut self, _elem: hopeCiphertext) -> Option<ObjectId> {
-        match serialize(&_elem._g) {
+    pub fn insert_apl(&mut self, _elem: hopeCT) -> Option<ObjectId> {
+        match serde_json::to_string(&_elem._g) {
             Err(_) => return None,
             Ok(_g) => self._apl.insert(_g, _elem._id),
         }
     }
 
-    //pub fn lookup_ppl(&self, _token: Document) -> Option<hopeCiphertext> {}
+    //pub fn lookup_ppl(&self, _token: Document) -> Option<hopeCT> {}
     // omitted
 
-    //pub fn insert_ppl(&self, _elem: hopeCiphertext) -> Option<InsertOneResult> {}
+    //pub fn insert_ppl(&self, _elem: hopeCT) -> Option<InsertOneResult> {}
     // omitted
 
-    pub fn keys(&self) -> Option<hopeKey> {
+    pub fn keys(&self) -> Option<hopeK> {
         return self._key.clone();
     }
 
-    pub fn enc_key(&self) -> Option<EncryptionKey> {
+    pub fn enc_key(&self) -> Option<PaillierEncryptionKey> {
         if let Some(ref _k) = &self._key {
             return Some(_k._ek.clone());
         }
         None
     }
 
-    pub fn dec_key(&self) -> Option<DecryptionKey> {
+    pub fn dec_key(&self) -> Option<PaillierDecryptionKey> {
         if let Some(ref _k) = &self._key {
             return _k._dk.clone();
         }
@@ -326,7 +267,7 @@ impl hope<'_> {
 /*
 
 
-impl AddAssign for hopeCiphertext<T> {
+impl AddAssign for hopeCT<T> {
     fn add_assign(&mut self, other: Self) {
         let _g1 = self._g.add(other._g);
         match lookup_apl(_g1) {
@@ -335,7 +276,7 @@ impl AddAssign for hopeCiphertext<T> {
             }
             None => {
                 let _c = Paillier::add(&_pk._key, self._c, other._c);
-                let _ct = hopeCiphertext<T> {
+                let _ct = hopeCT<T> {
                     id: bson::oid::ObjectId::new(),
                     _c: _c,
                     _g: _g1,
@@ -360,10 +301,10 @@ impl AddAssign for hopeCiphertext<T> {
     }
 }
 
-impl StdSub for hopeCiphertext<T> {
-    type Output = hopeCiphertext<T>;
+impl StdSub for hopeCT<T> {
+    type Output = hopeCT<T>;
 
-    fn sub(self, other: Point) -> hopeCiphertext<T> {
+    fn sub(self, other: Point) -> hopeCT<T> {
         Point {
             //x: self.x - other.x,
             //y: self.y - other.y,
@@ -376,7 +317,7 @@ impl StdSub for hopeCiphertext<T> {
     }
 }
 
-impl SubAssign for hopeCiphertext<T> {
+impl SubAssign for hopeCT<T> {
     fn sub_assign(&mut self, other: Self) {
         *self = Self {
             //x: self.x + other.x,
@@ -390,10 +331,10 @@ impl SubAssign for hopeCiphertext<T> {
     }
 }
 
-impl std::ops::Add for hopeCiphertext<T> {
-    type Output = hopeCiphertext<T>;
+impl std::ops::Add for hopeCT<T> {
+    type Output = hopeCT<T>;
 
-    fn add(self, other: hopeCiphertext<T>) -> hopeCiphertext<T> {
+    fn add(self, other: hopeCT<T>) -> hopeCT<T> {
         if let Some(ek) = System::enc_key() {
             let _g1 = self._g.add(other._g);
             match super::lookup_apl(_g1) {
@@ -403,7 +344,7 @@ impl std::ops::Add for hopeCiphertext<T> {
                 None => {
                     let _addition = Paillier::add(&ek._key, self._c, other._c);
                     Paillier::rerandomize(&ek._key, _addition);
-                    let _ct = hopeCiphertext<T> {
+                    let _ct = hopeCT<T> {
                         _id: ObjectId::new().unwrap(),
                         _c: _addition,
                         _g: _g1,
@@ -433,70 +374,6 @@ impl std::ops::Add for hopeCiphertext<T> {
     }
 }
 */
-impl hopeCiphertext {
-    pub fn clone(
-        _id: ObjectId,
-        _c: EncodedCiphertext<u64>,
-        _g: bn::G1,
-        _h: bn::Gt,
-        _o: u64,
-    ) -> hopeCiphertext {
-        hopeCiphertext {
-            _id: _id,
-            _c: _c,
-            _g: _g,
-            _h: _h,
-            _o: _o,
-        }
-    }
-
-    pub fn from_id(
-        _id: ObjectId,
-        _c: EncodedCiphertext<u64>,
-        _g: bn::G1,
-        _h: bn::Gt,
-        _o: u64,
-    ) -> hopeCiphertext {
-        hopeCiphertext {
-            _id: _id,
-            _c: _c,
-            _g: _g,
-            _h: _h,
-            _o: _o,
-        }
-    }
-
-    pub fn new(_c: EncodedCiphertext<u64>, _g: bn::G1, _h: bn::Gt, _o: u64) -> hopeCiphertext {
-        hopeCiphertext {
-            _id: ObjectId::new().unwrap(),
-            _c: _c,
-            _g: _g,
-            _h: _h,
-            _o: _o,
-        }
-    }
-}
-
-impl Ord for hopeCiphertext {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self._o.cmp(&other._o)
-    }
-}
-
-impl PartialOrd for hopeCiphertext {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for hopeCiphertext {
-    fn eq(&self, other: &Self) -> bool {
-        self._o == other._o
-    }
-}
-
-impl Eq for hopeCiphertext {}
-
 
 
 #[cfg(test)]
